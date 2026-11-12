@@ -17,6 +17,7 @@ pub struct GatewayConfig {
     pub upstream_api_key: Option<String>,
     pub default_model: String,
     pub cooldown_default_secs: u64,
+    pub cooldown_enabled: bool,
 }
 
 impl Default for GatewayConfig {
@@ -36,6 +37,7 @@ impl Default for GatewayConfig {
             upstream_api_key: None,
             default_model: "deepseek-v4.1-flash-free".to_string(),
             cooldown_default_secs: 60,
+            cooldown_enabled: false,
         }
     }
 }
@@ -111,6 +113,10 @@ impl GatewayConfig {
         let default_model = env::var("DEFAULT_MODEL")
             .unwrap_or_else(|_| "deepseek-v4.1-flash-free".to_string());
 
+        let cooldown_enabled = env::var("GATEWAY_COOLDOWN_ENABLED")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         let cooldown_default_secs = env::var("COOLDOWN_DEFAULT_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -131,6 +137,7 @@ impl GatewayConfig {
             upstream_api_key,
             default_model,
             cooldown_default_secs,
+            cooldown_enabled,
         }
     }
 }

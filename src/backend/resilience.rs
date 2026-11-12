@@ -110,8 +110,10 @@ impl ModelDispatcher {
     ) -> Result<mpsc::Receiver<Result<ChatCompletionChunk, GatewayError>>, GatewayError> {
         let target_model = Self::resolve_model(&request.model, &config.default_model);
 
-        // 1. Check if model is currently in a known cooldown period
-        if let Some(remaining) = cooldowns.get_remaining(&target_model) {
+        // 1. Check if model is currently in a known cooldown period (opt-in)
+        if config.cooldown_enabled
+            && let Some(remaining) = cooldowns.get_remaining(&target_model)
+        {
             let secs = remaining.as_secs().max(1);
             return Err(GatewayError::RateLimitExceeded {
                 message: format!(
@@ -128,7 +130,9 @@ impl ModelDispatcher {
             .map_err(|e| match e {
                 AdapterError::UpstreamRateLimited { message, retry_after } => {
                     let cooldown = retry_after.unwrap_or_else(|| Duration::from_secs(config.cooldown_default_secs));
-                    cooldowns.set_cooldown(&target_model, cooldown);
+                    if config.cooldown_enabled {
+                        cooldowns.set_cooldown(&target_model, cooldown);
+                    }
                     GatewayError::RateLimitExceeded {
                         message: format!("Upstream quota limit for '{}': {}", target_model, message),
                         retry_after: Some(cooldown),
@@ -143,6 +147,7 @@ impl ModelDispatcher {
         let cooldowns_clone = cooldowns.clone();
         let target_model_clone = target_model.clone();
         let default_cooldown = Duration::from_secs(config.cooldown_default_secs);
+        let cooldown_enabled = config.cooldown_enabled;
 
         tokio::spawn(async move {
             let mut inner_rx = rx;
@@ -155,7 +160,9 @@ impl ModelDispatcher {
                     }
                     Err(AdapterError::UpstreamRateLimited { message, retry_after }) => {
                         let cooldown = retry_after.unwrap_or(default_cooldown);
-                        cooldowns_clone.set_cooldown(&target_model_clone, cooldown);
+                        if cooldown_enabled {
+                            cooldowns_clone.set_cooldown(&target_model_clone, cooldown);
+                        }
                         let _ = out_tx
                             .send(Err(GatewayError::RateLimitExceeded {
                                 message: format!("Upstream rate limit for '{}': {}", target_model_clone, message),
@@ -190,8 +197,10 @@ impl ModelDispatcher {
     ) -> Result<ChatCompletionResponse, GatewayError> {
         let target_model = Self::resolve_model(&request.model, &config.default_model);
 
-        // 1. Check if model is in cooldown
-        if let Some(remaining) = cooldowns.get_remaining(&target_model) {
+        // 1. Check if model is in cooldown (opt-in)
+        if config.cooldown_enabled
+            && let Some(remaining) = cooldowns.get_remaining(&target_model)
+        {
             let secs = remaining.as_secs().max(1);
             return Err(GatewayError::RateLimitExceeded {
                 message: format!(
@@ -208,7 +217,9 @@ impl ModelDispatcher {
             .map_err(|e| match e {
                 AdapterError::UpstreamRateLimited { message, retry_after } => {
                     let cooldown = retry_after.unwrap_or_else(|| Duration::from_secs(config.cooldown_default_secs));
-                    cooldowns.set_cooldown(&target_model, cooldown);
+                    if config.cooldown_enabled {
+                        cooldowns.set_cooldown(&target_model, cooldown);
+                    }
                     GatewayError::RateLimitExceeded {
                         message: format!("Upstream quota limit for '{}': {}", target_model, message),
                         retry_after: Some(cooldown),

@@ -188,6 +188,7 @@ When OpenCode's free tier quota is reached:
 | `REQUEST_TIMEOUT_SECS` | `60` | Overall request timeout |
 | `DEFAULT_MODEL` | `deepseek-v4.1-flash-free` | Default model when not specified |
 | `COOLDOWN_DEFAULT_SECS` | `60` | Default cooldown duration when upstream omits Retry-After |
+| `GATEWAY_COOLDOWN_ENABLED` | `false` | When `true`, cache upstream 429s and reject during the Retry-After window. Off by default so the gateway always reflects live upstream state (returns replies as soon as quota is available) |
 | `BUN_PATH` | auto (searches paths) | Path to Bun binary for the sidecar bridge. Auto-detected across `~/.bun/bin/bun`, `/tmp/opencode/bun`, `/usr/local/bin/bun`, `/opt/homebrew/bin/bun` |
 | `GATEWAY_BRIDGE_PATH` | auto (embedded) | Path to an external `opencode_bridge.js` override. If unset, the embedded copy is used (next-to-executable and baked-in paths are also searched first) |
 | `OPENCODE_INFERENCE_URL` | `https://opencode.ai/...` | Upstream OpenCode inference endpoint |
