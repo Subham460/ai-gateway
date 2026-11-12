@@ -92,10 +92,10 @@ required at runtime and are resolved automatically:
    ```bash
    !curl -fsSL https://bun.sh/install | bash
    ```
-2. **The bridge script** (`opencode_bridge.js`) — place it next to the binary
-   (either `./sidecar/opencode_bridge.js` or `./opencode_bridge.js`) or set
-   `GATEWAY_BRIDGE_PATH`. The gateway resolves it at runtime, so it no longer
-   depends on the machine it was compiled on.
+2. **No bridge file needed** — `opencode_bridge.js` is now **embedded** in the
+   binary and materialized on demand, so the gateway is fully self-contained.
+   An external script is only used if present (via `GATEWAY_BRIDGE_PATH` or
+   placed next to the executable).
 
 Minimal Colab run:
 
@@ -189,7 +189,7 @@ When OpenCode's free tier quota is reached:
 | `DEFAULT_MODEL` | `deepseek-v4.1-flash-free` | Default model when not specified |
 | `COOLDOWN_DEFAULT_SECS` | `60` | Default cooldown duration when upstream omits Retry-After |
 | `BUN_PATH` | auto (searches paths) | Path to Bun binary for the sidecar bridge. Auto-detected across `~/.bun/bin/bun`, `/tmp/opencode/bun`, `/usr/local/bin/bun`, `/opt/homebrew/bin/bun` |
-| `GATEWAY_BRIDGE_PATH` | auto (next to binary) | Path to `opencode_bridge.js`. Auto-resolved next to the executable (`./sidecar/opencode_bridge.js` or `./opencode_bridge.js`) or via the baked-in source path |
+| `GATEWAY_BRIDGE_PATH` | auto (embedded) | Path to an external `opencode_bridge.js` override. If unset, the embedded copy is used (next-to-executable and baked-in paths are also searched first) |
 | `OPENCODE_INFERENCE_URL` | `https://opencode.ai/...` | Upstream OpenCode inference endpoint |
 | `OPENCODE_API_KEY` | (empty) | Optional upstream key (defaults to `"public"` sentinel) |
 

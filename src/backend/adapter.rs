@@ -3,7 +3,9 @@ use crate::types::{
     ChatChoice, ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse,
     ChatResponseMessage, UsageInfo,
 };
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
@@ -27,7 +29,7 @@ impl OpenCodeAdapter {
         target_model: &str,
         config: &GatewayConfig,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<ChatCompletionChunk, AdapterError>>, AdapterError> {
-        let bridge_script = locate_bridge_script();
+        let bridge_script = locate_bridge_script().unwrap_or_else(materialize_bridge_script);
 
         let mut cmd = Command::new(&config.bun_path);
         cmd.arg("run")
@@ -189,20 +191,22 @@ impl OpenCodeAdapter {
     }
 }
 
-/// Locate the Bun sidecar bridge script at runtime.
-///
-/// The original code baked in the build-machine absolute path (via
-/// `CARGO_MANIFEST_DIR`), which breaks when the prebuilt binary is moved to
-/// another machine (e.g. Google Colab). We now resolve the script in order:
+/// The Bun sidecar bridge script, embedded into the binary at compile time. This
+/// makes the gateway fully self-contained: the bridge is materialized on demand,
+/// so no external `opencode_bridge.js` file is required next to the executable.
+const EMBEDDED_BRIDGE_SCRIPT: &str = include_str!("../sidecar/opencode_bridge.js");
+
+/// Locate an external bridge script if one is available. Resolution order:
 ///   1. `GATEWAY_BRIDGE_PATH` env var (explicit override)
 ///   2. Next to the running executable: `sidecar/opencode_bridge.js`, then
 ///      `opencode_bridge.js`
-///   3. The original compile-time path as a last resort.
-fn locate_bridge_script() -> String {
+///   3. The original compile-time path (in case the repo layout is present)
+/// If none exist, returns `None` and the caller falls back to the embedded copy.
+fn locate_bridge_script() -> Option<String> {
     if let Ok(path) = std::env::var("GATEWAY_BRIDGE_PATH") {
         let path = path.trim();
-        if !path.is_empty() {
-            return path.to_string();
+        if !path.is_empty() && Path::new(path).exists() {
+            return Some(path.to_string());
         }
     }
 
@@ -214,11 +218,27 @@ fn locate_bridge_script() -> String {
             ];
             for candidate in candidates {
                 if candidate.exists() {
-                    return candidate.to_string_lossy().into_owned();
+                    return Some(candidate.to_string_lossy().into_owned());
                 }
             }
         }
     }
 
-    concat!(env!("CARGO_MANIFEST_DIR"), "/src/sidecar/opencode_bridge.js").to_string()
+    let baked = concat!(env!("CARGO_MANIFEST_DIR"), "/src/sidecar/opencode_bridge.js");
+    if Path::new(baked).exists() {
+        return Some(baked.to_string());
+    }
+
+    None
+}
+
+/// Write the embedded bridge script to a temp file (once) and return its path.
+fn materialize_bridge_script() -> String {
+    static PATH: OnceLock<PathBuf> = OnceLock::new();
+    let path = PATH.get_or_init(|| {
+        let path = std::env::temp_dir().join("opencode_bridge.js");
+        let _ = std::fs::write(&path, EMBEDDED_BRIDGE_SCRIPT);
+        path
+    });
+    path.to_string_lossy().into_owned()
 }
